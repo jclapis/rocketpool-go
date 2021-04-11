@@ -1,20 +1,20 @@
 package rocketpool
 
 import (
-    "bytes"
-    "context"
-    "errors"
-    "fmt"
-    "reflect"
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"math/big"
+	"reflect"
 
-    "github.com/ethereum/go-ethereum"
-    "github.com/ethereum/go-ethereum/accounts/abi"
-    "github.com/ethereum/go-ethereum/accounts/abi/bind"
-    "github.com/ethereum/go-ethereum/common"
-    "github.com/ethereum/go-ethereum/core/types"
-    "github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
 )
-
 
 // Transaction settings
 const (
@@ -37,6 +37,37 @@ func (c *Contract) Call(opts *bind.CallOpts, result interface{}, method string, 
     results := make([]interface{}, 1)
     results[0] = result
     return c.Contract.Call(opts, &results, method, params...)
+}
+
+
+// Get the recommended gas price and and gas limit for the provided transaction
+func (c *Contract) GetTransactionCostEstimate(opts *bind.TransactOpts, method string, params ...interface{}) (*big.Int, uint64, error) {
+
+    // Estimate gas limit
+    var gasLimit uint64
+    if opts.GasLimit == 0 {
+        input, err := c.ABI.Pack(method, params...)
+        if err != nil {
+            return nil, 0, fmt.Errorf("Error getting transaction cost estimate: could not encode input data: %w", err)
+        }
+        gasLimit, err = c.estimateGasLimit(opts, input)
+        if err != nil {
+            return nil, 0, fmt.Errorf("Error getting transaction cost estimate: could not estimate gas limit: %w", err)
+        }
+    }
+
+    // Estimate gas price if it's not explicitly defined
+    gasPrice := opts.GasPrice
+    if gasPrice == nil {
+        var err error
+        gasPrice, err = c.Client.SuggestGasPrice(context.Background())
+        if err != nil {
+            return nil, 0, fmt.Errorf("Error getting transaction cost estimate: could not estimate gas price: %w", err)
+        }
+    }
+
+    return gasPrice, gasLimit, nil
+    
 }
 
 
@@ -65,6 +96,34 @@ func (c *Contract) Transact(opts *bind.TransactOpts, method string, params ...in
     // Get & return transaction receipt
     return c.getTransactionReceipt(tx)
 
+}
+
+
+// Get the recommended gas price and and gas limit for the provided transaction
+func (c *Contract) GetTransferCostEstimate(opts *bind.TransactOpts) (*big.Int, uint64, error) {
+
+    // Estimate gas limit
+    var gasLimit uint64
+    if opts.GasLimit == 0 {
+        var err error
+        gasLimit, err = c.estimateGasLimit(opts, []byte{})
+        if err != nil {
+            return nil, 0, fmt.Errorf("Error getting transfer cost estimate: could not estimate gas limit: %w", err)
+        }
+    }
+
+    // Estimate gas price if it's not explicitly defined
+    gasPrice := opts.GasPrice
+    if gasPrice == nil {
+        var err error
+        gasPrice, err = c.Client.SuggestGasPrice(context.Background())
+        if err != nil {
+            return nil, 0, fmt.Errorf("Error getting transfer cost estimate: could not estimate gas price: %w", err)
+        }
+    }
+
+    return gasPrice, gasLimit, nil
+    
 }
 
 

@@ -1,15 +1,15 @@
 package eth
 
 import (
-    "math/big"
-    "strconv"
+	"math/big"
+	"strconv"
 )
-
 
 // Conversion factors
 const (
     WeiPerEth float64 = 1e18
     WeiPerGwei float64 = 1e9
+    GweiPerEth float64 = WeiPerEth / WeiPerGwei
 )
 
 
@@ -58,3 +58,10 @@ func GweiToWei(gwei float64) *big.Int {
     return &wei
 }
 
+
+// Convert gas price in wei and gas limit to gas price in gwei and cost in ETH
+func GetGasEstimates(gasPrice *big.Int, gasLimit uint64) (float64, float64) {
+    gasPriceGwei := WeiToGwei(gasPrice)
+    ethCost := gasPriceGwei * float64(gasLimit) / GweiPerEth
+    return gasPriceGwei, ethCost
+}
